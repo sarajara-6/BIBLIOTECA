@@ -1,0 +1,18 @@
+{
+  "name": "Bibliotheca",
+  "short_name": "Bibliotheca",
+  "description": "Tu diario de lectura personal",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#eef1fb",
+  "theme_color": "#9b78e0",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
