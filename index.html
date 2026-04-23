@@ -195,11 +195,16 @@ main.sb-closed{margin-left:0;}
 .crow{display:grid;grid-template-columns:1fr 1fr;gap:0.9rem;}
 .ccard{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:1.3rem 1.5rem;box-shadow:0 3px 14px var(--shadow);}
 .ctit{font-family:'Playfair Display',serif;font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:0.9rem;}
-.barchart{display:flex;align-items:flex-end;gap:0.35rem;height:100px;padding-bottom:0;position:relative;margin-bottom:1.6rem;}
+.barchart{display:flex;align-items:flex-end;gap:0.35rem;height:100px;padding-bottom:0;position:relative;margin-bottom:1.6rem;margin-top:2rem;}
 .bw{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;flex:1;}
 .bar{width:100%;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--purple),var(--blue));min-height:4px;transition:height 0.4s ease;}
 .bval{font-size:0.62rem;color:var(--purple-deep);font-weight:700;min-height:0.85rem;line-height:1.2;}
 .blbl{font-size:0.58rem;color:var(--muted);font-weight:700;}
+.yr-bar{display:flex;align-items:center;justify-content:center;gap:1rem;margin-bottom:1.2rem;}
+.yr-lbl{font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:700;color:var(--purple-deep);min-width:70px;text-align:center;}
+.yr-arr{background:var(--purple-pale);border:1.5px solid var(--purple-soft);border-radius:50%;width:34px;height:34px;font-size:1.1rem;color:var(--purple-deep);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;}
+.yr-arr:hover{background:var(--purple-soft);}
+.yr-arr:disabled{opacity:0.3;cursor:default;}
 .dwrap{display:flex;align-items:center;gap:1.1rem;}
 .dleg{display:flex;flex-direction:column;gap:0.45rem;flex:1;}
 .dli{display:flex;align-items:center;gap:0.45rem;font-size:0.76rem;color:var(--text-soft);}
@@ -341,6 +346,12 @@ main.sb-closed{margin-left:0;}
 </div>
 <!-- META -->
 <div class="section" id="section-meta">
+  <!-- Year selector -->
+  <div class="yr-bar">
+    <button class="yr-arr" onclick="changeYear(-1)">‹</button>
+    <span class="yr-lbl" id="yr-display"></span>
+    <button class="yr-arr" onclick="changeYear(1)" id="yr-next">›</button>
+  </div>
   <div class="gc">
     <div class="gring">
       <svg width="115" height="115" viewBox="0 0 115 115">
@@ -353,7 +364,7 @@ main.sb-closed{margin-left:0;}
     <div class="gi">
       <h3>Meta de lectura <span id="goal-year"></span></h3>
       <p id="goal-msg">Define cuántos libros quieres leer este año.</p>
-      <div class="girow"><label>Meta:</label><input type="number" id="goal-inp" value="12" min="1" max="365"/><button class="bsm" onclick="saveGoal()">Guardar</button></div>
+      <div class="girow" id="goal-edit-row"><label>Meta:</label><input type="number" id="goal-inp" value="12" min="1" max="365"/><button class="bsm" onclick="saveGoal()">Guardar</button></div>
     </div>
   </div>
   <div class="sgrid">
@@ -518,12 +529,17 @@ function saveW(){
 function saveGoal(){
   goal = parseInt(document.getElementById('goal-inp').value)||12;
   _lsSaveGoal();
-  if(!_useLocalOnly && db) db.ref('goal').set(goal).catch(function(e){console.error('save goal',e);});
+  try{ localStorage.setItem('bib_goal_'+viewYear, String(goal)); }catch(e){}
+  if(!_useLocalOnly && db) db.ref('goal_'+viewYear).set(goal).catch(function(e){console.error('save goal',e);});
   updateMeta();
 }
 
 // ── Real-time listeners / local boot ─────────────────────────
-document.getElementById('goal-year').textContent = new Date().getFullYear();
+var viewYear = new Date().getFullYear();
+var currentYear = new Date().getFullYear();
+document.getElementById('goal-year').textContent = viewYear;
+document.getElementById('yr-display').textContent = viewYear;
+document.getElementById('yr-next').disabled = true;
 
 function _mergeCovers(list){
   try {
@@ -538,7 +554,8 @@ function _bootFromLocalStorage(){
   try { var v=localStorage.getItem('bib_books'); if(v) books=_mergeCovers(JSON.parse(v)); } catch(e){}
   try { var v=localStorage.getItem('bib_wishes'); if(v) wishes=JSON.parse(v); } catch(e){}
   try { var v=localStorage.getItem('bib_colls'); if(v) colls=JSON.parse(v); } catch(e){}
-  try { var v=localStorage.getItem('bib_goal'); if(v){ goal=parseInt(v)||12; document.getElementById('goal-inp').value=goal; } } catch(e){}
+  goal=_getYearGoal(viewYear);
+  document.getElementById('goal-inp').value=goal;
   loaded.books=true; loaded.wishes=true; loaded.colls=true; loaded.goal=true;
   checkAllLoaded();
   renderGrid(); renderStats();
@@ -579,9 +596,10 @@ if(_useLocalOnly || !db) {
     renderColls();
   });
 
-  db.ref('goal').on('value', function(snap){
+  db.ref('goal_'+viewYear).on('value', function(snap){
     var val = snap.val();
-    if(val) { goal = val; document.getElementById('goal-inp').value = goal; }
+    if(val) { goal = val; } else { goal=_getYearGoal(viewYear); }
+    document.getElementById('goal-inp').value = goal;
     loaded.goal = true;
     checkAllLoaded();
   });
@@ -995,27 +1013,73 @@ function updateDaysBadge(b){
   } else { wrap.innerHTML=''; }
 }
 function toggleBC(id,c){var b=books.find(function(x){return x.id===id;});if(!b)return;b.collections=b.collections||[];var i=b.collections.indexOf(c);if(i>=0)b.collections.splice(i,1);else b.collections.push(c);save();openModal(id);}
+function changeYear(dir){
+  viewYear+=dir;
+  document.getElementById('yr-display').textContent=viewYear;
+  document.getElementById('goal-year').textContent=viewYear;
+  // disable next arrow if viewing current year
+  document.getElementById('yr-next').disabled=(viewYear>=currentYear);
+  // show/hide goal edit (only editable for current year)
+  document.getElementById('goal-edit-row').style.display=viewYear===currentYear?'flex':'none';
+  // load goal for that year
+  var savedGoal=_getYearGoal(viewYear);
+  document.getElementById('goal-inp').value=savedGoal;
+  goal=savedGoal;
+  updateMeta();
+}
+function _getYearGoal(yr){
+  try{ var g=localStorage.getItem('bib_goal_'+yr); return g?parseInt(g):12; }catch(e){return 12;}
+}
+function _getLeidosByYear(yr){
+  var yrStr=String(yr);
+  var result=[];
+  books.forEach(function(b){
+    if(b.status!=='leido') return;
+    // check readings history
+    if(b.readings&&b.readings.length){
+      b.readings.forEach(function(r){
+        var d=r.dateEnd||r.dateStart||'';
+        if(d&&d.indexOf(yrStr)===0) result.push({book:b,reading:r});
+      });
+    } else {
+      // fallback to direct date
+      var d=b.dateEnd||b.dateStart||'';
+      if(d&&d.indexOf(yrStr)===0) result.push({book:b,reading:null});
+      else if(!d&&yr===currentYear) result.push({book:b,reading:null});
+    }
+  });
+  return result;
+}
 function updateMeta(){
-  var leidos=books.filter(function(b){return b.status==='leido';});
-  var tp=leidos.reduce(function(s,b){return s+(b.pages||0);},0);
-  var rated=leidos.filter(function(b){return b.rating>0;});
-  var avg=rated.length?(rated.reduce(function(s,b){return s+b.rating;},0)/rated.length).toFixed(1):'—';
-  document.getElementById('m-leidos').textContent=leidos.length;
+  var yr=String(viewYear);
+  var entries=_getLeidosByYear(viewYear);
+  var count=entries.length;
+  // pages & rating from the book (not duplicated per reading)
+  var seen={};
+  var tp=0,rsum=0,rcnt=0;
+  entries.forEach(function(e){
+    if(!seen[e.book.id]){
+      seen[e.book.id]=true;
+      tp+=(e.book.pages||0);
+      if(e.book.rating>0){rsum+=e.book.rating;rcnt++;}
+    }
+  });
+  var avg=rcnt?(rsum/rcnt).toFixed(1):'—';
+  document.getElementById('m-leidos').textContent=count;
   document.getElementById('m-pags').textContent=tp.toLocaleString();
   document.getElementById('m-avg').textContent=avg!=='—'?avg+'⭐':'—';
-  document.getElementById('ring-num').textContent=leidos.length;
+  document.getElementById('ring-num').textContent=count;
   document.getElementById('ring-den').textContent='de '+goal;
-  document.getElementById('ring-fill').style.strokeDashoffset=301.6*(1-Math.min(leidos.length/(goal||1),1));
-  var rem=Math.max(goal-leidos.length,0);
-  document.getElementById('goal-msg').textContent=leidos.length>=goal?'🎉 ¡Alcanzaste tu meta de '+goal+' libros!':'Te faltan '+rem+' libro'+(rem!==1?'s':'')+' para llegar a tu meta.';
+  document.getElementById('ring-fill').style.strokeDashoffset=301.6*(1-Math.min(count/(goal||1),1));
+  var rem=Math.max(goal-count,0);
+  document.getElementById('goal-msg').textContent=count>=goal?'🎉 ¡Alcanzaste tu meta de '+goal+' libros!':'Te faltan '+rem+' libro'+(rem!==1?'s':'')+' para llegar a tu meta.';
   drawBar();drawDonut();
 }
 function drawBar(){
-  var yr=String(new Date().getFullYear());
+  var yr=String(viewYear);
   var c=[0,0,0,0,0,0,0,0,0,0,0,0];
   books.filter(function(b){return b.status==='leido';}).forEach(function(b){
     var counted=false;
-    // Contar cada entrada del historial que tenga fecha fin en el año actual
     if(b.readings&&b.readings.length){
       b.readings.forEach(function(r){
         var d=r.dateEnd||r.dateStart||'';
@@ -1025,7 +1089,6 @@ function drawBar(){
         }
       });
     }
-    // Si no hay historial guardado, usar fecha directa del libro
     if(!counted){
       var d=b.dateEnd||b.dateStart||'';
       if(d&&d.indexOf(yr)===0){
@@ -1046,7 +1109,10 @@ function drawBar(){
   }).join('');
 }
 function drawDonut(){
-  var leidos=books.filter(function(b){return b.status==='leido'&&b.genre;});
+  var yr=String(viewYear);
+  var entries=_getLeidosByYear(viewYear);
+  var seen={};var leidos=[];
+  entries.forEach(function(e){if(e.book.genre&&!seen[e.book.id+'-'+yr]){seen[e.book.id+'-'+yr]=true;leidos.push(e.book);}});
   var cnt={};leidos.forEach(function(b){cnt[b.genre]=(cnt[b.genre]||0)+1;});
   var entries=Object.keys(cnt).map(function(k){return[k,cnt[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,6);
   var total=entries.reduce(function(s,e){return s+e[1];},0);
