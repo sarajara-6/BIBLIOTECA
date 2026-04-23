@@ -195,11 +195,11 @@ main.sb-closed{margin-left:0;}
 .crow{display:grid;grid-template-columns:1fr 1fr;gap:0.9rem;}
 .ccard{background:var(--surface);border:1.5px solid var(--border);border-radius:16px;padding:1.3rem 1.5rem;box-shadow:0 3px 14px var(--shadow);}
 .ctit{font-family:'Playfair Display',serif;font-size:0.9rem;font-weight:700;color:var(--text);margin-bottom:0.9rem;}
-.barchart{display:flex;align-items:flex-end;gap:0.35rem;height:110px;}
-.bw{display:flex;flex-direction:column;align-items:center;gap:0.2rem;flex:1;}
-.bar{width:100%;border-radius:5px 5px 0 0;background:linear-gradient(180deg,var(--purple-soft),var(--blue-soft));min-height:2px;}
+.barchart{display:flex;align-items:flex-end;gap:0.35rem;height:100px;padding-bottom:0;position:relative;margin-bottom:1.6rem;}
+.bw{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;flex:1;}
+.bar{width:100%;border-radius:4px 4px 0 0;background:linear-gradient(180deg,var(--purple),var(--blue));min-height:4px;transition:height 0.4s ease;}
+.bval{font-size:0.62rem;color:var(--purple-deep);font-weight:700;min-height:0.85rem;line-height:1.2;}
 .blbl{font-size:0.58rem;color:var(--muted);font-weight:700;}
-.bval{font-size:0.62rem;color:var(--purple-deep);font-weight:700;}
 .dwrap{display:flex;align-items:center;gap:1.1rem;}
 .dleg{display:flex;flex-direction:column;gap:0.45rem;flex:1;}
 .dli{display:flex;align-items:center;gap:0.45rem;font-size:0.76rem;color:var(--text-soft);}
@@ -274,7 +274,7 @@ main.sb-closed{margin-left:0;}
       <div class="fg"><label>Título</label><input type="text" id="inp-title" placeholder="El nombre del libro..."/></div>
       <div class="fg"><label>Autor</label><input type="text" id="inp-author" placeholder="Nombre del autor..."/></div>
       <div class="fg"><label>Género</label>
-        <select id="inp-genre"><option value="">Sin género</option><option>Thriller</option><option>Ficción</option><option>No ficción</option><option>Fantasía</option><option>Ciencia ficción</option><option>Misterio</option><option>Romance</option><option>Historia</option><option>Autoayuda</option><option>Clásico</option><option>Poesía</option><option>Otro</option></select>
+        <select id="inp-genre"><option value="">Sin género</option><option>Thriller</option><option>Terror</option><option>Ficción</option><option>No ficción</option><option>Fantasía</option><option>Ciencia ficción</option><option>Misterio</option><option>Romance</option><option>Historia</option><option>Biografía</option><option>Autoayuda</option><option>Clásico</option><option>Poesía</option><option>Otro</option></select>
       </div>
       <div class="fg"><label>Estado</label>
         <select id="inp-status"><option value="pendiente">📌 Pendiente</option><option value="leyendo">📖 Leyendo</option><option value="leido">✅ Leído</option></select>
@@ -435,20 +435,35 @@ main.sb-closed{margin-left:0;}
   </div>
 </div>
 <!-- Firebase Realtime Database -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" onerror="window._firebaseFailed=true"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js" onerror="window._firebaseFailed=true"></script>
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyDq9sGlA7z7w7FkUeEH1GP46JedxMTIbUU",
-  authDomain: "biblioteca-f3ef1.firebaseapp.com",
-  projectId: "biblioteca-f3ef1",
-  databaseURL: "https://biblioteca-f3ef1-default-rtdb.firebaseio.com",
-  storageBucket: "biblioteca-f3ef1.firebasestorage.app",
-  messagingSenderId: "1031691270445",
-  appId: "1:1031691270445:web:bc62fb3937354ea1557ba4"
-};
-firebase.initializeApp(firebaseConfig);
-var db = firebase.database();
+var db = null;
+var _useLocalOnly = false;
+
+(function(){
+  if(window._firebaseFailed || typeof firebase === 'undefined') {
+    _useLocalOnly = true;
+    console.warn('Firebase no disponible — modo local activado.');
+    return;
+  }
+  try {
+    var firebaseConfig = {
+      apiKey: "AIzaSyDq9sGlA7z7w7FkUeEH1GP46JedxMTIbUU",
+      authDomain: "biblioteca-f3ef1.firebaseapp.com",
+      projectId: "biblioteca-f3ef1",
+      databaseURL: "https://biblioteca-f3ef1-default-rtdb.firebaseio.com",
+      storageBucket: "biblioteca-f3ef1.firebasestorage.app",
+      messagingSenderId: "1031691270445",
+      appId: "1:1031691270445:web:bc62fb3937354ea1557ba4"
+    };
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+  } catch(e) {
+    _useLocalOnly = true;
+    console.warn('Error al inicializar Firebase:', e.message, '— modo local activado.');
+  }
+})();
 
 // ── State ─────────────────────────────────────────────────────
 var books = [], wishes = [], colls = ["⭐ Favoritos","🔁 Releer algún día","🎬 Adaptados a serie/película"];
@@ -470,77 +485,107 @@ function checkAllLoaded() {
 function showSync(msg){ var e=document.getElementById('sync-status'); if(e){e.textContent=msg||'🔄 Sincronizando...';e.style.display='block';} }
 function hideSync(){ var e=document.getElementById('sync-status'); if(e)e.style.display='none'; }
 
-// ── Save to Realtime Database ─────────────────────────────────
+// ── Save helpers (Firebase + localStorage fallback) ──────────
+
+function _lsSave(){ try{ localStorage.setItem('bib_books', JSON.stringify(books)); }catch(e){} }
+function _lsSaveC(){ try{ localStorage.setItem('bib_colls', JSON.stringify(colls)); }catch(e){} }
+function _lsSaveW(){ try{ localStorage.setItem('bib_wishes', JSON.stringify(wishes)); }catch(e){} }
+function _lsSaveGoal(){ try{ localStorage.setItem('bib_goal', String(goal)); }catch(e){} }
 
 function save(){
-  // Save covers locally first
   var covers = {};
   books.forEach(function(b){ if(b.cover && b.cover.length > 100) covers['cover_'+b.id] = b.cover; });
   try { localStorage.setItem('bib_covers', JSON.stringify(covers)); } catch(e){}
-  // Send to Firebase with covers included (compressed, should be ~30KB each)
-  var toSave = books.map(function(b){ 
-    var copy = Object.assign({}, b); 
-    // Only strip if over 100KB (uncompressed/large image slipped through)
+  _lsSave();
+  if(_useLocalOnly || !db) return;
+  var toSave = books.map(function(b){
+    var copy = Object.assign({}, b);
     if(copy.cover && copy.cover.length > 100000) copy.cover = '';
-    return copy; 
+    return copy;
   });
   db.ref('books').set(toSave).catch(function(e){console.error('save books',e);});
 }
-function saveC(){ db.ref('colls').set(colls).catch(function(e){console.error('save colls',e);}); }
-function saveW(){ db.ref('wishes').set(wishes).catch(function(e){console.error('save wishes',e);}); }
+function saveC(){
+  _lsSaveC();
+  if(_useLocalOnly || !db) return;
+  db.ref('colls').set(colls).catch(function(e){console.error('save colls',e);});
+}
+function saveW(){
+  _lsSaveW();
+  if(_useLocalOnly || !db) return;
+  db.ref('wishes').set(wishes).catch(function(e){console.error('save wishes',e);});
+}
 function saveGoal(){
   goal = parseInt(document.getElementById('goal-inp').value)||12;
-  db.ref('goal').set(goal).catch(function(e){console.error('save goal',e);});
+  _lsSaveGoal();
+  if(!_useLocalOnly && db) db.ref('goal').set(goal).catch(function(e){console.error('save goal',e);});
   updateMeta();
 }
 
-// ── Real-time listeners ───────────────────────────────────────
+// ── Real-time listeners / local boot ─────────────────────────
 document.getElementById('goal-year').textContent = new Date().getFullYear();
-showSync('🔄 Cargando tu biblioteca...');
 
-db.ref('books').on('value', function(snap){
-  var val = snap.val();
-  var incoming = val ? (Array.isArray(val) ? val : Object.values(val)) : [];
-  // Merge covers from localStorage into incoming books
+function _mergeCovers(list){
   try {
     var raw = localStorage.getItem('bib_covers');
     var covers = raw ? JSON.parse(raw) : {};
-    incoming.forEach(function(b){ 
-      if(!b.cover && covers['cover_'+b.id]) b.cover = covers['cover_'+b.id]; 
-    });
+    list.forEach(function(b){ if(!b.cover && covers['cover_'+b.id]) b.cover = covers['cover_'+b.id]; });
   } catch(e){}
-  books = incoming;
-  loaded.books = true;
+  return list;
+}
+
+function _bootFromLocalStorage(){
+  try { var v=localStorage.getItem('bib_books'); if(v) books=_mergeCovers(JSON.parse(v)); } catch(e){}
+  try { var v=localStorage.getItem('bib_wishes'); if(v) wishes=JSON.parse(v); } catch(e){}
+  try { var v=localStorage.getItem('bib_colls'); if(v) colls=JSON.parse(v); } catch(e){}
+  try { var v=localStorage.getItem('bib_goal'); if(v){ goal=parseInt(v)||12; document.getElementById('goal-inp').value=goal; } } catch(e){}
+  loaded.books=true; loaded.wishes=true; loaded.colls=true; loaded.goal=true;
   checkAllLoaded();
   renderGrid(); renderStats();
-  // Refresh wishlist so pending books stay in sync
-  if(document.getElementById('section-deseos').classList.contains('active')) renderWishes();
-  if(document.getElementById('section-historial').classList.contains('active')) renderHistorial();
   renderSidebarHistorial();
-});
+}
 
-db.ref('wishes').on('value', function(snap){
-  var val = snap.val();
-  wishes = val ? (Array.isArray(val) ? val : Object.values(val)) : [];
-  loaded.wishes = true;
-  checkAllLoaded();
-  renderWishes();
-});
+if(_useLocalOnly || !db) {
+  hideSync();
+  _bootFromLocalStorage();
+} else {
+  showSync('🔄 Cargando tu biblioteca...');
 
-db.ref('colls').on('value', function(snap){
-  var val = snap.val();
-  colls = val ? (Array.isArray(val) ? val : Object.values(val)) : ["⭐ Favoritos","🔁 Releer algún día","🎬 Adaptados a serie/película"];
-  loaded.colls = true;
-  checkAllLoaded();
-  renderColls();
-});
+  db.ref('books').on('value', function(snap){
+    var val = snap.val();
+    var incoming = val ? (Array.isArray(val) ? val : Object.values(val)) : [];
+    books = _mergeCovers(incoming);
+    loaded.books = true;
+    checkAllLoaded();
+    renderGrid(); renderStats();
+    if(document.getElementById('section-deseos').classList.contains('active')) renderWishes();
+    if(document.getElementById('section-historial').classList.contains('active')) renderHistorial();
+    renderSidebarHistorial();
+  });
 
-db.ref('goal').on('value', function(snap){
-  var val = snap.val();
-  if(val) { goal = val; document.getElementById('goal-inp').value = goal; }
-  loaded.goal = true;
-  checkAllLoaded();
-});
+  db.ref('wishes').on('value', function(snap){
+    var val = snap.val();
+    wishes = val ? (Array.isArray(val) ? val : Object.values(val)) : [];
+    loaded.wishes = true;
+    checkAllLoaded();
+    renderWishes();
+  });
+
+  db.ref('colls').on('value', function(snap){
+    var val = snap.val();
+    colls = val ? (Array.isArray(val) ? val : Object.values(val)) : ["⭐ Favoritos","🔁 Releer algún día","🎬 Adaptados a serie/película"];
+    loaded.colls = true;
+    checkAllLoaded();
+    renderColls();
+  });
+
+  db.ref('goal').on('value', function(snap){
+    var val = snap.val();
+    if(val) { goal = val; document.getElementById('goal-inp').value = goal; }
+    loaded.goal = true;
+    checkAllLoaded();
+  });
+}
 
 // ── App functions ─────────────────────────────────────────────
 function toggleSidebar(){
@@ -968,9 +1013,37 @@ function updateMeta(){
 function drawBar(){
   var yr=String(new Date().getFullYear());
   var c=[0,0,0,0,0,0,0,0,0,0,0,0];
-  books.filter(function(b){return b.status==='leido'&&b.dateEnd&&b.dateEnd.indexOf(yr)===0;}).forEach(function(b){c[parseInt(b.dateEnd.split('-')[1])-1]++;});
+  books.filter(function(b){return b.status==='leido';}).forEach(function(b){
+    var counted=false;
+    // Contar cada entrada del historial que tenga fecha fin en el año actual
+    if(b.readings&&b.readings.length){
+      b.readings.forEach(function(r){
+        var d=r.dateEnd||r.dateStart||'';
+        if(d&&d.indexOf(yr)===0){
+          var m=parseInt(d.split('-')[1])-1;
+          if(m>=0&&m<12){c[m]++;counted=true;}
+        }
+      });
+    }
+    // Si no hay historial guardado, usar fecha directa del libro
+    if(!counted){
+      var d=b.dateEnd||b.dateStart||'';
+      if(d&&d.indexOf(yr)===0){
+        var m=parseInt(d.split('-')[1])-1;
+        if(m>=0&&m<12) c[m]++;
+      }
+    }
+  });
   var mx=Math.max.apply(null,c.concat([1]));
-  document.getElementById('bar-chart').innerHTML=c.map(function(v,i){return'<div class="bw"><span class="bval">'+(v>0?v:'')+'</span><div class="bar" style="height:'+Math.round((v/mx)*100)+'px"></div><span class="blbl">'+MONTHS[i]+'</span></div>';}).join('');
+  var container=document.getElementById('bar-chart');
+  container.innerHTML=c.map(function(v,i){
+    var h=v>0?Math.max(Math.round((v/mx)*90),6):0;
+    return'<div class="bw">'+
+      '<div class="bar" style="height:'+h+'px"></div>'+
+      '<span class="bval">'+(v>0?v:'')+'</span>'+
+      '<span class="blbl">'+MONTHS[i]+'</span>'+
+    '</div>';
+  }).join('');
 }
 function drawDonut(){
   var leidos=books.filter(function(b){return b.status==='leido'&&b.genre;});
