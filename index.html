@@ -248,6 +248,20 @@ main.sb-closed{margin-left:0;}
 .hentry-noreview{font-size:0.78rem;color:var(--muted);font-style:italic;}
 #sb-hist-list > div:hover{background:var(--blue-pale);}
 
+
+.playlist-section{margin-top:0.3rem;}
+.playlist-add-row{display:flex;gap:0.5rem;margin-bottom:0.8rem;flex-wrap:wrap;}
+.playlist-inp{flex:1;min-width:130px;background:var(--bg);border:1.5px solid rgba(120,150,220,0.25);border-radius:9px;padding:0.48rem 0.8rem;color:var(--text);font-family:'Nunito',sans-serif;font-size:0.82rem;outline:none;}
+.playlist-inp:focus{border-color:var(--purple);background:#fff;}
+.btn-pl-add{padding:0.48rem 0.9rem;background:linear-gradient(135deg,#1db954,#17a349);border:none;border-radius:9px;color:#fff;font-family:'Nunito',sans-serif;font-size:0.8rem;font-weight:700;cursor:pointer;white-space:nowrap;}
+.playlist-list{display:flex;flex-direction:column;gap:0.45rem;}
+.playlist-item{display:flex;align-items:center;gap:0.7rem;background:var(--bg);border:1.5px solid rgba(29,185,84,0.25);border-radius:11px;padding:0.6rem 0.85rem;}
+.playlist-icon{font-size:1.1rem;flex-shrink:0;}
+.playlist-name{flex:1;font-size:0.84rem;font-weight:700;color:var(--text);}
+.btn-pl-open{padding:0.28rem 0.7rem;background:#1db954;border:none;border-radius:7px;color:#fff;font-family:'Nunito',sans-serif;font-size:0.72rem;font-weight:700;cursor:pointer;white-space:nowrap;text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem;}
+.btn-pl-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.75rem;padding:0.15rem 0.3rem;border-radius:5px;}
+.btn-pl-del:hover{color:#e87a7a;background:rgba(232,122,122,0.1);}
+.pl-empty{font-size:0.78rem;color:var(--muted);font-style:italic;padding:0.3rem 0;}
 </style>
 </head>
 <body>
@@ -442,6 +456,16 @@ main.sb-closed{margin-left:0;}
       <div class="mdiv"></div>
       <div class="msec">Colecciones</div>
       <div class="cassign" id="m-colls"></div>
+      <div class="mdiv"></div>
+      <div class="msec">🎵 Playlists de Spotify</div>
+      <div class="playlist-section">
+        <div class="playlist-add-row">
+          <input type="text" class="playlist-inp" id="pl-name" placeholder="Nombre de la playlist..."/>
+          <input type="text" class="playlist-inp" id="pl-link" placeholder="Link de Spotify..."/>
+          <button class="btn-pl-add" onclick="addPlaylist()">+ Agregar</button>
+        </div>
+        <div class="playlist-list" id="pl-list"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -975,6 +999,7 @@ function openModal(id){
   document.getElementById('m-rev').value=b.review||'';
   updateDaysBadge(b);
   renderHistory(b);
+  renderPlaylists(b);
   var cw=document.getElementById('mcov');
   cw.innerHTML=b.cover?'<img class="mcov-img" src="'+b.cover+'" alt=""/>':'<div class="mcov-ph">'+b.emoji+'</div>';
   var sb=document.getElementById('m-badge');sb.textContent=LBL[b.status];sb.className='sbadge '+CLS[b.status];
@@ -985,6 +1010,46 @@ function openModal(id){
   ['pendiente','leyendo','leido'].forEach(function(s){document.getElementById('bs-'+s).classList.toggle('act',s===b.status);});
   document.getElementById('modal-overlay').classList.add('open');
   document.body.style.overflow='hidden';
+}
+function addPlaylist(){
+  if(!openId)return;
+  var b=books.find(function(x){return x.id===openId;});
+  if(!b)return;
+  var name=document.getElementById('pl-name').value.trim();
+  var link=document.getElementById('pl-link').value.trim();
+  if(!name)return;
+  if(!b.playlists)b.playlists=[];
+  b.playlists.push({id:Date.now(),name:name,link:link});
+  document.getElementById('pl-name').value='';
+  document.getElementById('pl-link').value='';
+  save();
+  renderPlaylists(b);
+}
+function delPlaylist(bookId,plId){
+  var b=books.find(function(x){return x.id===bookId;});
+  if(!b||!b.playlists)return;
+  b.playlists=b.playlists.filter(function(p){return p.id!==plId;});
+  save();
+  renderPlaylists(b);
+}
+function renderPlaylists(b){
+  var list=document.getElementById('pl-list');
+  if(!list)return;
+  if(!b.playlists||!b.playlists.length){
+    list.innerHTML='<div class="pl-empty">Aún no hay playlists. ¡Agrega la primera!</div>';
+    return;
+  }
+  list.innerHTML=b.playlists.map(function(p){
+    var linkBtn=p.link
+      ?'<a class="btn-pl-open" href="'+p.link+'" target="_blank">▶ Abrir en Spotify</a>'
+      :'';
+    return '<div class="playlist-item">'
+      +'<span class="playlist-icon">🎵</span>'
+      +'<span class="playlist-name">'+p.name+'</span>'
+      +linkBtn
+      +'<button class="btn-pl-del" onclick="delPlaylist('+b.id+','+p.id+')">✕</button>'
+      +'</div>';
+  }).join('');
 }
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');document.body.style.overflow='';openId=null;}
 function closeOut(e){if(e.target===document.getElementById('modal-overlay'))closeModal();}
