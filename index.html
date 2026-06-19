@@ -262,6 +262,15 @@ main.sb-closed{margin-left:0;}
 .btn-pl-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.75rem;padding:0.15rem 0.3rem;border-radius:5px;}
 .btn-pl-del:hover{color:#e87a7a;background:rgba(232,122,122,0.1);}
 .pl-empty{font-size:0.78rem;color:var(--muted);font-style:italic;padding:0.3rem 0;}
+
+.pl-book-block{margin-bottom:1.4rem;}
+.pl-book-header{display:flex;align-items:center;gap:0.8rem;margin-bottom:0.6rem;padding-bottom:0.5rem;border-bottom:1.5px solid var(--border);}
+.pl-book-cover{width:38px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;}
+.pl-book-cover-ph{width:38px;height:52px;background:linear-gradient(135deg,var(--blue-pale),var(--purple-pale));border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1.3rem;}
+.pl-book-info{flex:1;}
+.pl-book-title{font-family:'Playfair Display',serif;font-size:0.95rem;font-weight:700;color:var(--text);}
+.pl-book-author{font-size:0.72rem;color:var(--muted);font-style:italic;}
+.pl-book-items{display:flex;flex-direction:column;gap:0.4rem;padding-left:0.5rem;}
 </style>
 </head>
 <body>
@@ -282,6 +291,7 @@ main.sb-closed{margin-left:0;}
   <button class="tab" id="tab-estanteria" onclick="switchTab('estanteria',this)"><span class="tab-icon">🪵</span><span class="tab-label">Estantería</span></button>
   <button class="tab" id="tab-meta" onclick="switchTab('meta',this)"><span class="tab-icon">🎯</span><span class="tab-label">Meta Anual</span></button>
   <button class="tab" id="tab-historial" onclick="switchTab('historial',this)"><span class="tab-icon">🗂️</span><span class="tab-label">Historial</span></button>
+  <button class="tab" id="tab-playlists" onclick="switchTab('playlists',this)"><span class="tab-icon">🎵</span><span class="tab-label">Mis Playlists</span></button>
 </nav>
 <div class="sb-toggle" id="sb-toggle" onclick="toggleSidebar()">❯</div>
 <main>
@@ -401,6 +411,18 @@ main.sb-closed{margin-left:0;}
     </div>
     <div id="hist-container"></div>
     <div class="empty" id="hist-empty" style="display:none"><div class="empty-ico">📖</div><p>Aún no tienes historial</p><small>Guarda lecturas desde cada libro para verlas aquí</small></div>
+  </div>
+</div>
+<!-- PLAYLISTS SECTION -->
+<div class="section" id="section-playlists">
+  <div class="panel">
+    <div class="panel-title">🎵 Mis Playlists</div>
+    <div id="all-playlists-list"></div>
+    <div class="empty" id="all-playlists-empty" style="display:none">
+      <div class="empty-ico">🎵</div>
+      <p>Aún no tienes playlists guardadas</p>
+      <small>Abre un libro y agrega una playlist de Spotify</small>
+    </div>
   </div>
 </div>
 </main>
@@ -733,6 +755,7 @@ function switchTab(n,el){
   if(n==='meta') updateMeta();
   if(n==='estanteria') renderShelf();
   if(n==='historial') renderHistorial();
+  if(n==='playlists') renderAllPlaylists();
 }
 function renderSidebarHistorial(){
   var cont=document.getElementById('sb-hist-list');
@@ -1049,6 +1072,44 @@ function renderPlaylists(b){
       +linkBtn
       +'<button class="btn-pl-del" onclick="delPlaylist('+b.id+','+p.id+')">✕</button>'
       +'</div>';
+  }).join('');
+}
+function renderAllPlaylists(){
+  var wrap=document.getElementById('all-playlists-list');
+  var empty=document.getElementById('all-playlists-empty');
+  if(!wrap)return;
+  var booksWithPl=books.filter(function(b){return b.playlists&&b.playlists.length>0;});
+  if(!booksWithPl.length){
+    wrap.innerHTML='';
+    if(empty)empty.style.display='block';
+    return;
+  }
+  if(empty)empty.style.display='none';
+  wrap.innerHTML=booksWithPl.map(function(b){
+    var covHtml=b.cover
+      ?'<img class="pl-book-cover" src="'+b.cover+'" alt=""/>'
+      :'<div class="pl-book-cover-ph">'+b.emoji+'</div>';
+    var items=b.playlists.map(function(p){
+      var linkBtn=p.link
+        ?'<a class="btn-pl-open" href="'+p.link+'" target="_blank">▶ Abrir</a>'
+        :'';
+      return '<div class="playlist-item">'
+        +'<span class="playlist-icon">🎵</span>'
+        +'<span class="playlist-name">'+p.name+'</span>'
+        +linkBtn
+        +'</div>';
+    }).join('');
+    return '<div class="pl-book-block">'
+      +'<div class="pl-book-header">'
+        +covHtml
+        +'<div class="pl-book-info">'
+          +'<div class="pl-book-title">'+b.title+'</div>'
+          +'<div class="pl-book-author">'+b.author+'</div>'
+        +'</div>'
+        +'<button onclick="openModal('+b.id+')" style="background:none;border:none;color:var(--purple-deep);cursor:pointer;font-size:0.75rem;font-family:Nunito,sans-serif;font-weight:700;padding:0.2rem 0.5rem;">Ver libro →</button>'
+      +'</div>'
+      +'<div class="pl-book-items">'+items+'</div>'
+    +'</div>';
   }).join('');
 }
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');document.body.style.overflow='';openId=null;}
